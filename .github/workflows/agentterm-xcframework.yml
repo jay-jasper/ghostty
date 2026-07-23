@@ -29,6 +29,12 @@ jobs:
           # Keep in sync with minimum_zig_version in build.zig.zon.
           version: 0.16.0
 
+      # -Demit-macos-app=false is required, not optional. Ghostty defaults
+      # emit_macos_app to `emit_xcframework` (src/build/Config.zig), so asking
+      # for the framework also drives a full xcodebuild of Ghostty.app —
+      # including the DockTilePlugin target, which fails on the runner. We only
+      # want the framework.
+      #
       # `universal` is already the default for -Dxcframework-target, but naming
       # it keeps the intent obvious: one framework holding both architectures.
       - name: Build GhosttyKit.xcframework
@@ -36,6 +42,7 @@ jobs:
           zig build \
             -Doptimize=ReleaseFast \
             -Demit-xcframework \
+            -Demit-macos-app=false \
             -Dxcframework-target=universal
 
       - name: Verify the framework was produced
