@@ -45,6 +45,18 @@ jobs:
             -Demit-macos-app=false \
             -Dxcframework-target=universal
 
+      # libghostty-vt is the stable, standalone VT state machine. AgentTerm
+      # renders its own cells, so this is what it actually links against; the
+      # full framework above is kept for reference and for tooling.
+      - name: Build libghostty-vt xcframework
+        run: |
+          zig build \
+            -Doptimize=ReleaseFast \
+            -Demit-lib-vt \
+            -Demit-xcframework \
+            -Dxcframework-target=universal
+          ls -d macos/*.xcframework || true
+
       - name: Verify the framework was produced
         run: |
           test -d macos/GhosttyKit.xcframework
@@ -64,7 +76,7 @@ jobs:
       - name: Archive
         run: |
           tar -czf GhosttyKit.xcframework.tar.gz \
-            -C macos GhosttyKit.xcframework \
+            -C macos $(cd macos && ls -d *.xcframework | tr '\n' ' ') \
             -C .. ghostty
 
       - uses: actions/upload-artifact@v4
