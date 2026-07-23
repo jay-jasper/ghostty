@@ -1,0 +1,72 @@
+# Drop this into your ghostty fork as .github/workflows/xcframework.yml.
+#
+# Ghostty already knows how to produce GhosttyKit.xcframework: `-Demit-xcframework`
+# builds a universal binary and copies ghostty.h and module.modulemap in beside
+# it. This workflow only has to run that, add the shell-integration files, and
+# attach the archive to a release.
+#
+# AgentTerm's scripts/setup.sh downloads that archive, so contributors never
+# install Zig.
+name: GhosttyKit xcframework
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["agentterm-*"]
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          # The build derives a version string from git history.
+          fetch-depth: 0
+
+      - uses: mlugg/setup-zig@v2
+        with:
+          # Keep in sync with minimum_zig_version in build.zig.zon.
+          version: 0.16.0
+
+      # `universal` is already the default for -Dxcframework-target, but naming
+      # it keeps the intent obvious: one framework holding both architectures.
+      - name: Build GhosttyKit.xcframework
+        run: |
+          zig build \
+            -Doptimize=ReleaseFast \
+            -Demit-xcframework \
+            -Dxcframework-target=universal
+
+      - name: Verify the framework was produced
+        run: |
+          test -d macos/GhosttyKit.xcframework
+          find macos/GhosttyKit.xcframework -name ghostty.h -print -quit | grep -q .
+
+      # Shell integration and terminfo are runtime data the embedding app
+      # installs into the child shell's environment; they are not part of the
+      # framework itself.
+      - name: Collect runtime resources
+        run: |
+          mkdir -p ghostty
+          cp -R src/shell-integration ghostty/shell-integration
+          if [ -d zig-out/share/terminfo ]; then
+            cp -R zig-out/share/terminfo ghostty/terminfo
+          fi
+
+      - name: Archive
+        run: |
+          tar -czf GhosttyKit.xcframework.tar.gz \
+            -C macos GhosttyKit.xcframework \
+            -C .. ghostty
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GhosttyKit.xcframework
+          path: GhosttyKit.xcframework.tar.gz
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: GhosttyKit.xcframework.tar.gz
