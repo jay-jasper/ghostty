@@ -1,0 +1,39 @@
+name: libghostty-vt
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Zig
+        run: |
+          curl -fsSLO https://ziglang.org/download/0.16.0/zig-aarch64-macos-0.16.0.tar.xz
+          tar xf zig-aarch64-macos-0.16.0.tar.xz
+          echo "$PWD/zig-aarch64-macos-0.16.0" >> "$GITHUB_PATH"
+
+      - name: Build arm64
+        run: zig build -Demit-lib-vt=true -Doptimize=ReleaseFast -p zig-out-arm64
+
+      - name: Build x86_64
+        run: zig build -Demit-lib-vt=true -Doptimize=ReleaseFast -Dtarget=x86_64-macos -p zig-out-x64
+
+      - name: Package universal tarball
+        run: |
+          mkdir -p pkg/lib
+          lipo -create zig-out-arm64/lib/libghostty-vt.a zig-out-x64/lib/libghostty-vt.a -output pkg/lib/libghostty-vt.a
+          cp -R zig-out-arm64/include pkg/include
+          tar -C pkg -czf libghostty-vt-macos.tar.gz lib include
+          shasum -a 256 libghostty-vt-macos.tar.gz
+
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="vt-$(git rev-parse --short HEAD)"
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "$TAG" --notes "libghostty-vt macOS universal static lib (arm64 + x86_64)" \
+            libghostty-vt-macos.tar.gz \
+          || gh release upload "$TAG" libghostty-vt-macos.tar.gz --clobber --repo "$GITHUB_REPOSITORY"
