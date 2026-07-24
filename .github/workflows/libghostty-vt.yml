@@ -26,7 +26,12 @@ jobs:
       - name: Package universal tarball
         run: |
           mkdir -p pkg/lib
-          lipo -create zig-out-arm64/lib/libghostty-vt.a zig-out-x64/lib/libghostty-vt.a -output pkg/lib/libghostty-vt.a
+          # dylib, not the static archive: zig's bundled compiler_rt clashes
+          # with clang_rt when the .a is linked into a Swift app.
+          ARM=$(ls zig-out-arm64/lib/libghostty-vt.*.*.*.dylib)
+          X64=$(ls zig-out-x64/lib/libghostty-vt.*.*.*.dylib)
+          lipo -create "$ARM" "$X64" -output pkg/lib/libghostty-vt.dylib
+          install_name_tool -id @rpath/libghostty-vt.dylib pkg/lib/libghostty-vt.dylib
           cp -R zig-out-arm64/include pkg/include
           tar -C pkg -czf libghostty-vt-macos.tar.gz lib include
           shasum -a 256 libghostty-vt-macos.tar.gz
